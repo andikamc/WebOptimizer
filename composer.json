@@ -1,0 +1,20 @@
+{
+    "name": "andikamc/web-optimizer",
+    "type": "library",
+    "require": {
+        "php": ">=5.6"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "andikamc",
+            "homepage": "https://andikamc.me/",
+            "role": "developer"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "AndikaMC\\WebOptimizer\\": "src/"
+        }
+    }
+}
