@@ -48,7 +48,7 @@ class WebOptimizer extends Hook
 
 			if ($this->Validator->IsValidUTF8($this->input))
 			{
-				$this->input .= "<!-- Application Optimization took " . htmlspecialchars($this->BenchmarkTime, ENT_NOQUOTES, 'UTF-8') . " seconds to process -->";
+				$this->input .= "<!-- Application Optimization took " . htmlspecialchars($this->BenchmarkTime, ENT_NOQUOTES, 'UTF-8') . " seconds to Optimize -->";
 			}	
 		}
 
