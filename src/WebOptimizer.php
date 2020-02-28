@@ -5,23 +5,27 @@ class WebOptimizer extends Hook
 {
 	protected $Validator, $BenchmarkTime, $HtmlCracker;
 
-	public function __construct()
+	public function __construct($input, $options = [])
 	{
-		$this->Validator = new Validator;
-	}
+		parent::__construct(); // autoload from Hook
 
-	public function Optimize($input, $options = [])
-	{
+		$this->Validator = new Validator;
+		$this->input = $input;
 		$this->options = $options;
 
-		if (!($input = trim((string) $input)))
+		return $this;
+	}
+
+	public function Optimize()
+	{
+		if (!($this->input = trim((string) $this->input)))
 		{
-			return $input;
+			return $this->input;
 		}
 
-		if (!$this->Validator->IsHTMLDoc($input))
+		if (!$this->Validator->IsHTMLDoc($this->input))
 		{
-			return $input;
+			return $this->input;
 		}
 
 		if (isset($this->options["benchmark"]) && !empty($this->options['benchmark']))
@@ -29,10 +33,9 @@ class WebOptimizer extends Hook
 			$this->BenchmarkTime = microtime(true);
 		}
 
-		/**
-		 * 
-		 */
-		$input = $this->CompressCombineHeadBodyCss($input);
+		$html = $this->input;
+		$html = $this->OptimizeHTML($html, $this->options);
+		$this->input = $html;
 
 		/**
 		 * 
@@ -41,26 +44,15 @@ class WebOptimizer extends Hook
 		{
 			$this->BenchmarkTime = number_format(microtime(true) - $this->BenchmarkTime, 5, '.', '');
 
-			$input .= "\n\n";
+			$this->input .= "\n\n";
 
-			if ($this->Validator->IsValidUTF8($input))
+			if ($this->Validator->IsValidUTF8($this->input))
 			{
-				$input .= "<!-- Application took " . htmlspecialchars($this->BenchmarkTime, ENT_NOQUOTES, 'UTF-8') . " seconds -->";
+				$this->input .= "<!-- Application Optimization took " . htmlspecialchars($this->BenchmarkTime, ENT_NOQUOTES, 'UTF-8') . " seconds to process -->";
 			}	
 		}
 
-		return $input;
+		return $this->input;
 	}
 
-	protected function CompressCombineHeadBodyCss($html)
-	{
-		$this->HtmlCracker = new Functions\HtmlCracker($html, [
-			"compress_css" => true,
-			"combine_css"  => true,
-		]);
-
-		$parsed_html = $this->HtmlCracker->CrackHtml();
-
-		return $parsed_html;
-	}
 }
