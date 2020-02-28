@@ -58,11 +58,9 @@ class Combine
                 return str_replace( "\\", "/", str_replace( realpath(dirname($_SERVER["SCRIPT_FILENAME"])), NULL, $sourcePath ) );
             }
         }
-        else
-        {
-            file_put_contents($sourcePath, "");
-            $minifier = new Minify\JS($sourcePath);    
-        }
+
+        file_put_contents($sourcePath, "");
+        $minifier = new Minify\JS($sourcePath);    
 
         foreach($js_lists as $js_cracked)
         {
