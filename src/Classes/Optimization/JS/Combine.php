@@ -72,9 +72,9 @@ class Combine
                 }
                 else
                 {
-                    if (is_readable($save_path.$js_cracked["link_src"]))
+                    if (is_readable(str_replace(self::URLHost(""), "", realpath(dirname($_SERVER["SCRIPT_FILENAME"])).DIRECTORY_SEPARATOR.$js_cracked["link_src"])))
                     {
-                        $minifier->add(file_get_contents($save_path.$js_cracked["link_src"]));
+                        $minifier->add(file_get_contents(str_replace(self::URLHost(""), "", realpath(dirname($_SERVER["SCRIPT_FILENAME"])).DIRECTORY_SEPARATOR.$js_cracked["link_src"])));
                     }
                 }
             }

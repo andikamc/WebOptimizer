@@ -76,9 +76,9 @@ class Combine
                 }
                 else
                 {
-                    if (is_readable($save_path.$css_cracked["link_href"]))
+                    if (is_readable(str_replace(self::URLHost(""), "", realpath(dirname($_SERVER["SCRIPT_FILENAME"])).DIRECTORY_SEPARATOR.$css_cracked["link_href"])))
                     {
-                        $minifier->add($save_path.$css_cracked["link_href"]);
+                        $minifier->add(str_replace(self::URLHost(""), "", realpath(dirname($_SERVER["SCRIPT_FILENAME"])).DIRECTORY_SEPARATOR.$css_cracked["link_href"]));
                     }    
                 }
             }
