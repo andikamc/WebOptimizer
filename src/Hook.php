@@ -21,7 +21,7 @@ class Hook
 
     protected function OptimizeHTML($buffer, $options)
     {
-        $engine = Classes\Optimization\Engine::Optimize($buffer, $options);
+        $engine = (new Classes\Optimization\Engine)->Optimize($buffer, $options);
 
         return $engine;
     }
