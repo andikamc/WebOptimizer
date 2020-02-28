@@ -48,8 +48,19 @@ class Combine
         //
         $combined_css_name = "com-".hash("crc32", json_encode($css_lists)).".min.css";
         $sourcePath = $save_path.$combined_css_name;
-        file_put_contents($sourcePath, "");
-        $minifier = new Minify\CSS($sourcePath);
+
+        if (isset(self::$app_options["cache_combine_css"]) && !empty(self::$app_options["cache_combine_css"]))
+        {
+            if (file_exists($sourcePath))
+            {
+                return str_replace( "\\", "/", str_replace( realpath(dirname($_SERVER["SCRIPT_FILENAME"])), NULL, $sourcePath ) );
+            }
+        }
+        else
+        {
+            file_put_contents($sourcePath, "");
+            $minifier = new Minify\CSS($sourcePath);    
+        }
 
         //
         foreach($css_lists as $css_cracked)

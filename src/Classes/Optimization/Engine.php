@@ -2,7 +2,8 @@
 namespace AndikaMC\WebOptimizer\Classes\Optimization;
 
 use AndikaMC\WebOptimizer\Classes\Optimization\HTML\Minify as HTMLMinify;
-use AndikaMC\WebOptimizer\Classes\Optimization\CSS\Combine;
+use AndikaMC\WebOptimizer\Classes\Optimization\CSS\Combine as CombineCSS;
+use AndikaMC\WebOptimizer\Classes\Optimization\JS\Combine as CombineJS;
 use AndikaMC\WebOptimizer\Classes\Optimization\CSS\Minify as CSSMinify;
 
 class Engine
@@ -13,7 +14,21 @@ class Engine
         { // optimize css
             if (isset($options["combine_css"]) && !empty($options["combine_css"]))
             {
-                $engine = Combine::class;
+                $engine = CombineCSS::class;
+                $buffer = $engine::combine($buffer, $options);
+            }
+            else
+            {
+                $engine = CSSMinify::class;
+                $buffer = $engine::minify($buffer);    
+            }
+        }
+
+        if (isset($options["optimize_js"]) && !empty($options["optimize_js"]))
+        { // optimize js
+            if (isset($options["combine_js"]) && !empty($options["combine_js"]))
+            {
+                $engine = CombineJS::class;
                 $buffer = $engine::combine($buffer, $options);
             }
             else
