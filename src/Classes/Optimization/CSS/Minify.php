@@ -6,7 +6,7 @@ use MatthiasMullie\Minify as VendorMinify;
 
 class Minify
 {
-    public function minify($buffer)
+    public static function minify($buffer)
     {
         $engine = new Cracker;
 

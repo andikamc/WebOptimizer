@@ -18,6 +18,8 @@ class WebOptimizer extends Hook
 
 	public function Optimize()
 	{
+		$this->Validator->FixRequestScheme();
+
 		if (!($this->input = trim((string) $this->input)))
 		{
 			return $this->input;

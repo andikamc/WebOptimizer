@@ -2,99 +2,124 @@
 namespace AndikaMC\WebOptimizer\Classes\Optimization\CSS;
 
 use AndikaMC\WebOptimizer\Classes\Optimization\HTML\Cracker;
-use Exception;
+use AndikaMC\WebOptimizer\Classes\Storage\Engine;
 use MatthiasMullie\Minify;
 
 class Combine
 {
-    private static $app_options = [];
-    private static $uncombined_css = [];
-    private static $combined_css_url = "";
+    private static $AppEngine, $AppStorage, $AppOptions, $AppMinify, $UncombinedCSS, $CrackedCSS = [];
 
     public static function combine($buffer, $options)
     {
-        self::$app_options = $options;
-        $engine = new Cracker;
+        self::$AppOptions = $options;
+        self::$AppEngine  = new Cracker;
 
-        $cracked_css = $engine->CrackCSSTags($engine->CrackHTML($buffer));
-        foreach($cracked_css as $css_crack)
+        /**
+         * Crack HTML Tags
+         */
+        self::$CrackedCSS = self::$AppEngine->CrackCSSTags(
+            self::$AppEngine->CrackHTML($buffer)
+        );
+
+        /**
+         * Filter CSS Tags
+         */
+        foreach(self::$CrackedCSS as $CSSCrack)
         {
-            self::$uncombined_css[] = [
-                "is_link" => !empty($css_crack["link_href"]),
-                "is_link_external" => !empty($css_crack["link_href_external"]),
-                "is_style" => !empty($css_crack["style_css"]),
-                "link_href" => (!empty($css_crack["link_href"]) ? $css_crack["link_href"] : NULL),
-                "style_css" => (!empty($css_crack["style_css"]) ? $css_crack["style_css"] : NULL),
+            self::$UncombinedCSS[] = [
+                "il"  => !empty($CSSCrack["link_href"]),
+                "ilx" => !empty($CSSCrack["link_href_external"]),
+                "is"  => !empty($CSSCrack["style_css"]),
+                "lh"  => (!empty($CSSCrack["link_href"]) ? $CSSCrack["link_href"] : ""),
+                "sc"  => (!empty($CSSCrack["style_css"]) ? $CSSCrack["style_css"] : "")
             ];
 
-            $buffer = str_replace($css_crack["all"], NULL, $buffer);
+            /**
+             * Remove all original tags
+             */
+            $buffer = str_replace($CSSCrack["all"], "", $buffer);
         }
 
-        self::$combined_css_url = self::MergeUncombinedCSS(self::$uncombined_css);
-        $buffer = str_replace("</head>", "<link rel=\"stylesheet\" href=\"".self::URLHost(self::$combined_css_url)."\"></head>", $buffer);
+        /**
+         * Merge Uncombined CSS Content
+         */
+        $buffer = self::MergeUncombinedCSS($buffer);
 
+        /**
+         * Return
+         */
         return $buffer;
     }
 
-    private static function MergeUncombinedCSS(array $css_lists)
+    private static function MergeUncombinedCSS($buffer)
     {
-        $save_path = realpath(dirname($_SERVER["SCRIPT_FILENAME"])."/".(isset(self::$app_options["combine_css_path"]) ? self::$app_options["combine_css_path"] : "/")).DIRECTORY_SEPARATOR;
+        self::$AppStorage = new Engine(self::$AppOptions);
 
-        if (!is_dir($save_path))
-        { // cek direktori
-            throw new Exception("Combined CSS Path not found");
+        /**
+         * Validate Cache File
+         */
+        if (isset(self::$AppOptions["cache_combine_css"]) && !empty(self::$AppOptions["cache_combine_css"]) && self::$AppStorage->CheckFile(self::$AppStorage->GenerateFilename($buffer, ".min.css", @self::$AppOptions["combine_css_path"])))
+        {
+            goto cached;
         }
 
-        //
-        $combined_css_name = "com-".hash("crc32", json_encode($css_lists)).".min.css";
-        $sourcePath = $save_path.$combined_css_name;
+        self::$AppStorage->InitFile(self::$AppStorage->GenerateFilename($buffer, ".min.css", @self::$AppOptions["combine_css_path"]));
 
-        if (isset(self::$app_options["cache_combine_css"]) && !empty(self::$app_options["cache_combine_css"]))
+        /**
+         * Explode cracked css
+         */
+        foreach(self::$UncombinedCSS as $UncombinedCSS)
         {
-            if (file_exists($sourcePath))
+            if ($UncombinedCSS["is"])
             {
-                return str_replace( "\\", "/", str_replace( realpath(dirname($_SERVER["SCRIPT_FILENAME"])), NULL, $sourcePath ) );
-            }
-        }
-
-        file_put_contents($sourcePath, "");
-        $minifier = new Minify\CSS($sourcePath);    
-
-        //
-        foreach($css_lists as $css_cracked)
-        {
-            if ($css_cracked["is_style"])
-            {
-                $minifier->add($css_cracked["style_css"]);
+                self::$AppStorage->AddFile($UncombinedCSS["sc"]);
             }
 
-            if ($css_cracked["is_link"])
+            if ($UncombinedCSS["il"])
             {
-                if ($css_cracked["is_link_external"])
+                if ($UncombinedCSS["ilx"])
                 {
-                    $minifier->add("@import url(".$css_cracked["link_href"].")");
+                    self::$AppStorage->AddFile("@import url(".$UncombinedCSS["lh"].");");
                 }
                 else
                 {
-                    if (is_readable(str_replace(self::URLHost(""), "", realpath(dirname($_SERVER["SCRIPT_FILENAME"])).DIRECTORY_SEPARATOR.$css_cracked["link_href"])))
+                    if (preg_match('#((https?|ftp)://(\S*?\.\S*?))([\s)\[\]{},;"\':<]|\.\s|$)#i', $UncombinedCSS["lh"]))
                     {
-                        $minifier->add(str_replace(self::URLHost(""), "", realpath(dirname($_SERVER["SCRIPT_FILENAME"])).DIRECTORY_SEPARATOR.$css_cracked["link_href"]));
-                    }    
+                        self::$AppStorage->AddFile("@import url(".$UncombinedCSS["lh"].");");
+                    }
+                    else
+                    {
+                        self::$AppStorage->AddFile("@import url(".@self::$AppOptions["host"] . $UncombinedCSS["lh"].");");
+                    }
                 }
             }
         }
 
-        //
-        $minifier->gzip($sourcePath);
-        $minifier->minify($sourcePath);
+        /**
+         * Process Combined CSS
+         */
+        $file = self::$AppStorage->SaveFile();
+        self::$AppMinify = new Minify\CSS(self::$AppStorage->GetCacheDir() . @self::$AppOptions["combine_css_path"] . DIRECTORY_SEPARATOR . basename($file));
+        self::$AppMinify->gzip(self::$AppStorage->GetCacheDir() . @self::$AppOptions["combine_css_path"] . DIRECTORY_SEPARATOR . basename($file));
+        self::$AppMinify->minify(self::$AppStorage->GetCacheDir() . @self::$AppOptions["combine_css_path"] . DIRECTORY_SEPARATOR . basename($file));
+        goto finals;
 
-        $_rpath = str_replace( realpath(dirname($_SERVER["SCRIPT_FILENAME"])), NULL, $sourcePath );
-        
-        return str_replace( "\\", "/", $_rpath );
-    }
+        /**
+         * Cached file process
+         */
+        cached:
+        $file = str_replace(self::$AppStorage->GetBaseDir(), "", self::$AppStorage->GetCacheDir() . self::$AppStorage->GenerateFilename($buffer, ".min.css", @self::$AppOptions["combine_css_path"]));
+        $file = str_replace("\\", "/", $file);
 
-    private static function URLHost($asset)
-    {
-        return $_SERVER["REQUEST_SCHEME"]."://".str_replace("//", "/", $_SERVER["HTTP_HOST"].str_replace(basename($_SERVER["SCRIPT_NAME"]), "", $_SERVER["SCRIPT_NAME"]).$asset);
+        /**
+         * Replace and append to <head> attribute
+         */
+        finals:
+        $buffer = str_replace("</head>", "<link rel=\"stylesheet\" href=\"" . self::$AppOptions["host"] . $file . "\">" . "</head>", $buffer);
+        $buffer = str_replace("://", ":@@", $buffer);
+        $buffer = str_replace("//", "/", $buffer);
+        $buffer = str_replace(":@@", "://", $buffer);
+
+        return $buffer;
     }
 }

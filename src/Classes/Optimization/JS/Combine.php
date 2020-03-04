@@ -1,105 +1,125 @@
 <?php
-namespace AndikaMC\WebOptimizer\Classes\Optimization\Js;
+namespace AndikaMC\WebOptimizer\Classes\Optimization\JS;
 
 use AndikaMC\WebOptimizer\Classes\Optimization\HTML\Cracker;
-use Exception;
+use AndikaMC\WebOptimizer\Classes\Storage\Engine;
 use MatthiasMullie\Minify;
 
 class Combine
 {
-    private static $app_options = [];
-    private static $uncombined_js = [];
-    private static $combined_js_url = "";
+    private static $AppEngine, $AppStorage, $AppOptions, $AppMinify, $UncombinedJS, $CrackedJS = [];
 
-    public static function combine($buffer, $options = [])
+    public static function combine($buffer, $options)
     {
-        self::$app_options = $options;
-        $engine = new Cracker;
+        self::$AppOptions = $options;
+        self::$AppEngine  = new Cracker;
 
-        $cracked_js = $engine->CrackJSTags($engine->CrackHTML($buffer));
+        /**
+         * Crack HTML Tags
+         */
+        self::$CrackedJS = self::$AppEngine->CrackJSTags(
+            self::$AppEngine->CrackHTML($buffer)
+        );
 
-        foreach($cracked_js as $js_crack)
+        /**
+         * Filter CSS Tags
+         */
+        foreach(self::$CrackedJS as $JSCrack)
         {
-            if (empty($js_crack["exclude"]))
-            {
-                self::$uncombined_js[] = [
-                    "is_link" => !empty($js_crack["script_src"]),
-                    "is_link_external" => !empty($js_crack["script_src_external"]),
-                    "is_js" => !empty($js_crack["script_js"]),
-                    "link_src" => (!empty($js_crack["script_src"]) ? $js_crack["script_src"] : NULL),
-                    "script_js" => (!empty($js_crack["script_js"]) ? $js_crack["script_js"] : NULL),
-                ];
-                $buffer = str_replace($js_crack["all"], NULL, $buffer);
-            }
+            self::$UncombinedJS[] = [
+                "il"  => !empty($JSCrack["script_src"]),
+                "ilx" => !empty($JSCrack["script_src_external"]),
+                "is"  => !empty($JSCrack["script_js"]),
+                "lh"  => (!empty($JSCrack["script_src"]) ? $JSCrack["script_src"] : ""),
+                "sc"  => (!empty($JSCrack["script_js"]) ? $JSCrack["script_js"] : "")
+            ];
+
+            /**
+             * Remove all original tags
+             */
+            $buffer = str_replace($JSCrack["all"], "", $buffer);
         }
 
-        self::$combined_js_url = self::MergeUncombinedJS(self::$uncombined_js);
-        $buffer = str_replace("</body>", "<script type=\"text/javascript\" src=\"".self::URLHost(self::$combined_js_url)."\"></script></body>", $buffer);
+        /**
+         * Merge Uncombined CSS Content
+         */
+        $buffer = self::MergeUncombinedJS($buffer);
 
+        /**
+         * Return
+         */
         return $buffer;
     }
 
-    private static function MergeUncombinedJS(array $js_lists)
+    private static function MergeUncombinedJS($buffer)
     {
-        $save_path = realpath(dirname($_SERVER["SCRIPT_FILENAME"])."/".(isset(self::$app_options["combine_js_path"]) ? self::$app_options["combine_js_path"] : "/")).DIRECTORY_SEPARATOR;
+        self::$AppStorage = new Engine(self::$AppOptions);
 
-        if (!is_dir($save_path))
-        { // cek direktori
-            throw new Exception("Combined JS Path not found");
+        /**
+         * Validate Cache File
+         */
+        if (isset(self::$AppOptions["cache_combine_js"]) && !empty(self::$AppOptions["cache_combine_js"]) && self::$AppStorage->CheckFile(self::$AppStorage->GenerateFilename($buffer, ".min.js", @self::$AppOptions["combine_js_path"])))
+        {
+            goto cached;
         }
 
-        $combined_js_name = "com-".hash("crc32", json_encode($js_lists)).".min.js";
-        $sourcePath = $save_path.$combined_js_name;
+        self::$AppStorage->InitFile(self::$AppStorage->GenerateFilename($buffer, ".min.js", @self::$AppOptions["combine_js_path"]));
 
-        if (isset(self::$app_options["cache_combine_js"]) && !empty(self::$app_options["cache_combine_js"]))
+        /**
+         * Explode cracked css
+         */
+        foreach(self::$UncombinedJS as $UncombinedJS)
         {
-            if (file_exists($sourcePath))
+            if ($UncombinedJS["il"])
             {
-                return str_replace( "\\", "/", str_replace( realpath(dirname($_SERVER["SCRIPT_FILENAME"])), NULL, $sourcePath ) );
-            }
-        }
-
-        file_put_contents($sourcePath, "");
-        $minifier = new Minify\JS($sourcePath);    
-
-        foreach($js_lists as $js_cracked)
-        {
-            if ($js_cracked["is_link"])
-            {
-                if ($js_cracked["is_link_external"])
+                if ($UncombinedJS["ilx"])
                 {
-                    $minifier->add(file_get_contents($js_cracked["link_src"]));
+                    self::$AppStorage->AddFile(file_get_contents($UncombinedJS["lh"]).";\n");
                 }
                 else
                 {
-                    if (is_readable(str_replace(self::URLHost(""), "", realpath(dirname($_SERVER["SCRIPT_FILENAME"])).DIRECTORY_SEPARATOR.$js_cracked["link_src"])))
+                    if (preg_match('#((https?|ftp)://(\S*?\.\S*?))([\s)\[\]{},;"\':<]|\.\s|$)#i', $UncombinedJS["lh"]))
                     {
-                        $minifier->add(file_get_contents(str_replace(self::URLHost(""), "", realpath(dirname($_SERVER["SCRIPT_FILENAME"])).DIRECTORY_SEPARATOR.$js_cracked["link_src"])));
+                        self::$AppStorage->AddFile(file_get_contents($UncombinedJS["lh"]).";\n");
+                    }
+                    else
+                    {
+                        self::$AppStorage->AddFile(file_get_contents(@self::$AppOptions["host"] . $UncombinedJS["lh"]).";\n");
                     }
                 }
             }
-        }
 
-        foreach($js_lists as $js_cracked)
-        {
-            if ($js_cracked["is_js"])
+            if ($UncombinedJS["is"])
             {
-                $minifier->add($js_cracked["script_js"] . ";\n");
+                self::$AppStorage->AddFile($UncombinedJS["sc"].";\n");
             }
         }
 
-        //
-        $minifier->gzip($sourcePath);
-        $minifier->minify($sourcePath);
+        /**
+         * Process Combined CSS
+         */
+        $file = self::$AppStorage->SaveFile();
+        self::$AppMinify = new Minify\JS(self::$AppStorage->GetCacheDir() . @self::$AppOptions["combine_js_path"] . DIRECTORY_SEPARATOR . basename($file));
+        self::$AppMinify->gzip(self::$AppStorage->GetCacheDir() . @self::$AppOptions["combine_js_path"] . DIRECTORY_SEPARATOR . basename($file));
+        self::$AppMinify->minify(self::$AppStorage->GetCacheDir() . @self::$AppOptions["combine_js_path"] . DIRECTORY_SEPARATOR . basename($file));
+        goto finals;
 
-        $_rpath = str_replace( realpath(dirname($_SERVER["SCRIPT_FILENAME"])), NULL, $sourcePath );
-        
-        return str_replace( "\\", "/", $_rpath );
+        /**
+         * Cached file process
+         */
+        cached:
+        $file = str_replace(self::$AppStorage->GetBaseDir(), "", self::$AppStorage->GetCacheDir() . self::$AppStorage->GenerateFilename($buffer, ".min.js", @self::$AppOptions["combine_js_path"]));
+        $file = str_replace("\\", "/", $file);
+
+        /**
+         * Replace and append to <head> attribute
+         */
+        finals:
+        $buffer = str_replace("</body>", "<script type=\"text/javascript\" src=\"" . self::$AppOptions["host"] . $file . "\">" . "</script></body>", $buffer);
+        $buffer = str_replace("://", ":@@", $buffer);
+        $buffer = str_replace("//", "/", $buffer);
+        $buffer = str_replace(":@@", "://", $buffer);
+
+        return $buffer;
     }
-
-    private static function URLHost($asset)
-    {
-        return $_SERVER["REQUEST_SCHEME"]."://".str_replace("//", "/", $_SERVER["HTTP_HOST"].str_replace(basename($_SERVER["SCRIPT_NAME"]), "", $_SERVER["SCRIPT_NAME"]).$asset);
-    }
-
 }
