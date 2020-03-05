@@ -3,6 +3,7 @@ namespace AndikaMC\WebOptimizer\Classes\Optimization\JS;
 
 use AndikaMC\WebOptimizer\Classes\Optimization\HTML\Cracker;
 use AndikaMC\WebOptimizer\Classes\Storage\Engine;
+use AndikaMC\WebOptimizer\Classes\Optimization\Experimental;
 use MatthiasMullie\Minify;
 
 class Combine
@@ -91,7 +92,10 @@ class Combine
 
             if ($UncombinedJS["is"])
             {
-                self::$AppStorage->AddFile($UncombinedJS["sc"].";\n");
+                /**
+                 * More fixing bug remove comment
+                 */
+                self::$AppStorage->AddFile((new Experimental())->MinJS($UncombinedJS["sc"]).";\n");
             }
         }
 

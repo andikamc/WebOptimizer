@@ -10,8 +10,8 @@ class Engine
     public function __construct($options)
     {
         $this->options   = $options;
-        $this->base_dir  = realpath(dirname(__FILE__) . "/../../../../../../") . DIRECTORY_SEPARATOR;
-        $this->cache_dir = $this->base_dir . @$options["cache_location"] . DIRECTORY_SEPARATOR;
+        $this->base_dir  = $options["cache_directory"];
+        $this->cache_dir = trim($this->base_dir . DIRECTORY_SEPARATOR);
 
         /**
          * Validate Cache Directory
